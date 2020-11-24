@@ -115,7 +115,7 @@ table.dataTable tbody tr {
 	background-color: #000000;
 }
 table.dataTable.stripe tbody tr.odd, table.dataTable.display tbody tr.odd {
-	background-color: #141414;
+	background-color: #1d1d1d;
 }
 table.dataTable.hover tbody tr.hover,
 table.dataTable.hover tbody tr:hover, table.dataTable.display tbody tr:hover {
@@ -241,9 +241,10 @@ table.dataTable.display tbody > tr > .selected:hover {
 /*选中*/
 .xdsoft_datetimepicker .xdsoft_calendar td.xdsoft_default,
 .xdsoft_datetimepicker .xdsoft_calendar td.xdsoft_current,
-.xdsoft_datetimepicker .xdsoft_timepicker .xdsoft_time_box>div>div.xdsoft_current{
+.xdsoft_datetimepicker .xdsoft_timepicker .xdsoft_time_box>div>div.xdsoft_current,
+.xdsoft_datetimepicker .xdsoft_label>.xdsoft_select>div>.xdsoft_option.xdsoft_current{
 	color: #eeeeee;
-	background-color: #f99117;
+	background: #f99117;
 	box-shadow: none;
 	-webkit-box-shadow: none;
 }
