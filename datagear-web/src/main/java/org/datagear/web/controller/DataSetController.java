@@ -19,6 +19,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.datagear.analysis.DataSet;
+import org.datagear.analysis.DataSetOption;
 import org.datagear.analysis.DataSetParam;
 import org.datagear.analysis.ResolvedDataSetResult;
 import org.datagear.analysis.support.AbstractDataSet;
@@ -51,7 +52,7 @@ import org.datagear.persistence.PagingData;
 import org.datagear.util.FileUtil;
 import org.datagear.util.IDUtil;
 import org.datagear.util.IOUtil;
-import org.datagear.web.OperationMessage;
+import org.datagear.web.util.OperationMessage;
 import org.datagear.web.util.WebUtils;
 import org.datagear.web.vo.APIDDataFilterPagingQuery;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -716,12 +717,12 @@ public class DataSetController extends AbstractSchemaConnController
 		Map<String, Object> convertedParamValues = getDataSetParamValueConverter().convert(preview.getParamValues(),
 				dataSet.getParams());
 
-		TemplateResolvedDataSetResult result = dataSet.resolve(convertedParamValues);
+		TemplateResolvedDataSetResult result = dataSet.resolve(convertedParamValues, preview.getDataSetOption());
 
 		return result;
 	}
 
-	@RequestMapping(value = "/resolveSql", produces = CONTENT_TYPE_JSON)
+	@RequestMapping(value = "/resolveSql", produces = CONTENT_TYPE_HTML)
 	@ResponseBody
 	public String resolveSql(HttpServletRequest request, HttpServletResponse response,
 			org.springframework.ui.Model springModel, @RequestBody ResolveSqlParam resolveSqlParam) throws Throwable
@@ -744,7 +745,7 @@ public class DataSetController extends AbstractSchemaConnController
 		Map<String, Object> convertedParamValues = getDataSetParamValueConverter().convert(preview.getParamValues(),
 				dataSet.getParams());
 
-		TemplateResolvedDataSetResult result = dataSet.resolve(convertedParamValues);
+		TemplateResolvedDataSetResult result = dataSet.resolve(convertedParamValues, preview.getDataSetOption());
 
 		return result;
 	}
@@ -766,7 +767,7 @@ public class DataSetController extends AbstractSchemaConnController
 		Map<String, Object> convertedParamValues = getDataSetParamValueConverter().convert(preview.getParamValues(),
 				dataSet.getParams());
 
-		ResolvedDataSetResult result = dataSet.resolve(convertedParamValues);
+		ResolvedDataSetResult result = dataSet.resolve(convertedParamValues, preview.getDataSetOption());
 
 		return result;
 	}
@@ -787,7 +788,7 @@ public class DataSetController extends AbstractSchemaConnController
 		Map<String, Object> convertedParamValues = getDataSetParamValueConverter().convert(preview.getParamValues(),
 				dataSet.getParams());
 
-		ResolvedDataSetResult result = dataSet.resolve(convertedParamValues);
+		ResolvedDataSetResult result = dataSet.resolve(convertedParamValues, preview.getDataSetOption());
 
 		return result;
 	}
@@ -806,7 +807,7 @@ public class DataSetController extends AbstractSchemaConnController
 		Map<String, Object> convertedParamValues = getDataSetParamValueConverter().convert(preview.getParamValues(),
 				dataSet.getParams());
 
-		TemplateResolvedDataSetResult result = dataSet.resolve(convertedParamValues);
+		TemplateResolvedDataSetResult result = dataSet.resolve(convertedParamValues, preview.getDataSetOption());
 
 		return result;
 	}
@@ -827,7 +828,7 @@ public class DataSetController extends AbstractSchemaConnController
 		Map<String, Object> convertedParamValues = getDataSetParamValueConverter().convert(preview.getParamValues(),
 				dataSet.getParams());
 
-		ResolvedDataSetResult result = dataSet.resolve(convertedParamValues);
+		ResolvedDataSetResult result = dataSet.resolve(convertedParamValues, preview.getDataSetOption());
 
 		return result;
 	}
@@ -848,7 +849,7 @@ public class DataSetController extends AbstractSchemaConnController
 		Map<String, Object> convertedParamValues = getDataSetParamValueConverter().convert(preview.getParamValues(),
 				dataSet.getParams());
 
-		TemplateResolvedDataSetResult result = dataSet.resolve(convertedParamValues);
+		TemplateResolvedDataSetResult result = dataSet.resolve(convertedParamValues, preview.getDataSetOption());
 
 		return result;
 	}
@@ -1018,6 +1019,8 @@ public class DataSetController extends AbstractSchemaConnController
 		@SuppressWarnings("unchecked")
 		private Map<String, Object> paramValues = Collections.EMPTY_MAP;
 
+		private DataSetOption dataSetOption = null;
+
 		public AbstractDataSetPreview()
 		{
 			super();
@@ -1041,6 +1044,16 @@ public class DataSetController extends AbstractSchemaConnController
 		public void setParamValues(Map<String, Object> paramValues)
 		{
 			this.paramValues = paramValues;
+		}
+
+		public DataSetOption getDataSetOption()
+		{
+			return dataSetOption;
+		}
+
+		public void setDataSetOption(DataSetOption dataSetOption)
+		{
+			this.dataSetOption = dataSetOption;
 		}
 	}
 

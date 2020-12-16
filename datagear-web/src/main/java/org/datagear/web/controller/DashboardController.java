@@ -49,7 +49,7 @@ import org.datagear.util.FileUtil;
 import org.datagear.util.IDUtil;
 import org.datagear.util.IOUtil;
 import org.datagear.util.StringUtil;
-import org.datagear.web.OperationMessage;
+import org.datagear.web.util.OperationMessage;
 import org.datagear.web.util.WebUtils;
 import org.datagear.web.vo.APIDDataFilterPagingQuery;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -154,7 +154,7 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 		HtmlTplDashboardWidgetEntity dashboard = new HtmlTplDashboardWidgetEntity();
 		setCookieAnalysisProject(request, response, dashboard);
 
-		dashboard.setTemplates(HtmlTplDashboardWidgetEntity.DEFAULT_TEMPLATES);
+		dashboard.setTemplates(new String[0]);
 		dashboard.setTemplateEncoding(HtmlTplDashboardWidget.DEFAULT_TEMPLATE_ENCODING);
 
 		HtmlTplDashboardWidgetRenderer renderer = getHtmlTplDashboardWidgetEntityService()
@@ -164,8 +164,9 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 
 		model.addAttribute("dashboard", dashboard);
 		model.addAttribute("templates", toWriteJsonTemplateModel(dashboard.getTemplates()));
-		model.addAttribute("templateName", dashboard.getFirstTemplate());
+		model.addAttribute("templateName", HtmlTplDashboardWidgetEntity.DEFAULT_TEMPLATES[0]);
 		model.addAttribute("templateContent", templateContent);
+		model.addAttribute("defaultTemplateContent", templateContent);
 		model.addAttribute(KEY_TITLE_MESSAGE_KEY, "dashboard.addDashboard");
 		model.addAttribute(KEY_FORM_ACTION, "save");
 
@@ -183,10 +184,16 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 		if (dashboard == null)
 			throw new RecordNotFoundException();
 
+		HtmlTplDashboardWidgetRenderer renderer = getHtmlTplDashboardWidgetEntityService()
+				.getHtmlTplDashboardWidgetRenderer();
+
+		String defaultTemplateContent = renderer.simpleTemplateContent(dashboard.getTemplateEncoding());
+
 		model.addAttribute("dashboard", dashboard);
 		model.addAttribute("templates", toWriteJsonTemplateModel(dashboard.getTemplates()));
 		model.addAttribute("templateName", dashboard.getFirstTemplate());
-		model.addAttribute("templateContent", readTemplateContent(dashboard, dashboard.getFirstTemplate()));
+		model.addAttribute("templateContent", readResourceContent(dashboard, dashboard.getFirstTemplate()));
+		model.addAttribute("defaultTemplateContent", defaultTemplateContent);
 		model.addAttribute(KEY_TITLE_MESSAGE_KEY, "dashboard.editDashboard");
 		model.addAttribute(KEY_FORM_ACTION, "save");
 
@@ -196,36 +203,42 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 	@RequestMapping(value = "/save", produces = CONTENT_TYPE_JSON)
 	@ResponseBody
 	public ResponseEntity<OperationMessage> save(HttpServletRequest request, HttpServletResponse response,
-			HtmlTplDashboardWidgetEntity dashboard, @RequestParam("templateName") String templateName,
-			@RequestParam("templateContent") String templateContent) throws Exception
+			@RequestBody HtmlTplDashboardSaveForm form) throws Exception
 	{
-		templateName = trimResourceName(templateName);
+		if (isEmpty(form.getDashboard()) || isNull(form.getResourceNames()) || isNull(form.getResourceContents())
+				|| isNull(form.getResourceIsTemplates())
+				|| form.getResourceNames().length != form.getResourceContents().length
+				|| form.getResourceContents().length != form.getResourceIsTemplates().length)
+			throw new IllegalInputException();
 
 		User user = WebUtils.getUser(request, response);
 
+		HtmlTplDashboardWidgetEntity dashboard = form.getDashboard();
+		boolean isSaveAdd = isEmpty(dashboard.getId());
+
+		String[] templates = dashboard.getTemplates();
+		String[] resourceNames = form.getResourceNames();
+		String[] resourceContents = form.getResourceContents();
+		boolean[] resourceIsTemplates = form.getResourceIsTemplates();
+
+		trimResourceNames(templates);
+		trimResourceNames(resourceNames);
+
+		templates = mergeTemplates(templates, resourceNames, resourceIsTemplates);
+		dashboard.setTemplates(templates);
 		trimAnalysisProjectAwareEntityForSave(dashboard);
 
-		if (!dashboard.isTemplate(templateName))
-		{
-			List<String> templates = new ArrayList<>();
+		if (isBlank(dashboard.getName()) || isEmpty(templates) || (isSaveAdd && isEmpty(resourceNames)))
+			throw new IllegalInputException();
 
-			if (!isEmpty(dashboard.getTemplates()))
-				templates.addAll(Arrays.asList(dashboard.getTemplates()));
-
-			templates.add(templateName);
-
-			dashboard.setTemplates(templates.toArray(new String[templates.size()]));
-			trimResourceNames(dashboard.getTemplates());
-		}
-
-		checkSaveEntity(dashboard);
+		// 如果编辑了首页模板，则应重新解析编码
+		int firstTemplateIndex = StringUtil.search(resourceNames, templates[0]);
+		if (firstTemplateIndex > -1)
+			dashboard.setTemplateEncoding(resolveTemplateEncoding(resourceContents[firstTemplateIndex]));
 
 		boolean save = false;
 
-		if (templateName.equals(dashboard.getFirstTemplate()))
-			dashboard.setTemplateEncoding(resolveTemplateEncoding(templateContent));
-
-		if (isEmpty(dashboard.getId()))
+		if (isSaveAdd)
 		{
 			dashboard.setId(IDUtil.randomIdOnTime20());
 			dashboard.setCreateUser(user);
@@ -237,12 +250,14 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 		}
 
 		if (save)
-			saveTemplateContent(dashboard, templateName, templateContent);
+		{
+			for (int i = 0; i < resourceNames.length; i++)
+				saveResourceContent(dashboard, resourceNames[i], resourceContents[i]);
+		}
 
 		Map<String, Object> data = new HashMap<>();
 		data.put("id", dashboard.getId());
-		data.put("templateName", templateName);
-		data.put("templates", dashboard.getTemplates());
+		data.put("templates", templates);
 
 		ResponseEntity<OperationMessage> responseEntity = buildOperationMessageSaveSuccessResponseEntity(request);
 		responseEntity.getBody().setData(data);
@@ -253,12 +268,11 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 	@RequestMapping(value = "/saveTemplateNames", produces = CONTENT_TYPE_JSON)
 	@ResponseBody
 	public ResponseEntity<OperationMessage> saveTemplateNames(HttpServletRequest request, HttpServletResponse response,
-			org.springframework.ui.Model model, @RequestParam("id") String id,
-			@RequestParam(value = "templates", required = false) String[] templates) throws Exception
+			org.springframework.ui.Model model, @RequestParam("id") String id, @RequestBody String[] templates)
+			throws Exception
 	{
 		if (isEmpty(templates))
-			return buildOperationMessageFailResponseEntity(request, HttpStatus.BAD_REQUEST,
-					"dashboard.saveFailForAtLeastOneTemplate");
+			throw new IllegalInputException();
 
 		User user = WebUtils.getUser(request, response);
 
@@ -282,11 +296,11 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 		return responseEntity;
 	}
 
-	@RequestMapping(value = "/getTemplateContent", produces = CONTENT_TYPE_JSON)
+	@RequestMapping(value = "/getResourceContent", produces = CONTENT_TYPE_JSON)
 	@ResponseBody
-	public Map<String, Object> getTemplateContent(HttpServletRequest request, HttpServletResponse response,
+	public Map<String, Object> getResourceContent(HttpServletRequest request, HttpServletResponse response,
 			org.springframework.ui.Model model, @RequestParam("id") String id,
-			@RequestParam("templateName") String templateName) throws Exception
+			@RequestParam("resourceName") String resourceName) throws Exception
 	{
 		User user = WebUtils.getUser(request, response);
 
@@ -295,10 +309,12 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 		if (widget == null)
 			throw new RecordNotFoundException();
 
+		resourceName = trimResourceName(resourceName);
+
 		Map<String, Object> data = new HashMap<>();
 		data.put("id", id);
-		data.put("templateName", templateName);
-		data.put("templateContent", readTemplateContent(widget, templateName));
+		data.put("resourceName", resourceName);
+		data.put("resourceContent", readResourceContent(widget, resourceName));
 
 		return data;
 	}
@@ -318,7 +334,7 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 		TemplateDashboardWidgetResManager dashboardWidgetResManager = this.htmlTplDashboardWidgetEntityService
 				.getHtmlTplDashboardWidgetRenderer().getTemplateDashboardWidgetResManager();
 
-		List<String> resources = dashboardWidgetResManager.listResources(dashboard.getId());
+		List<String> resources = dashboardWidgetResManager.list(dashboard.getId());
 
 		return resources;
 	}
@@ -405,7 +421,7 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 		try
 		{
 			in = IOUtil.getInputStream(uploadFile);
-			out = dashboardWidgetResManager.getResourceOutputStream(id, resourceName);
+			out = dashboardWidgetResManager.getOutputStream(id, resourceName);
 
 			IOUtil.write(in, out);
 		}
@@ -549,7 +565,8 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 			dashboard.setAnalysisProject(analysisProject);
 		}
 
-		checkSaveEntity(dashboard);
+		if (isBlank(dashboard.getName()) || isEmpty(dashboard.getTemplates()))
+			throw new IllegalInputException();
 
 		dashboard.setId(IDUtil.randomIdOnTime20());
 		dashboard.setCreateUser(user);
@@ -580,7 +597,7 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 		model.addAttribute("dashboard", dashboard);
 		model.addAttribute("templates", toWriteJsonTemplateModel(dashboard.getTemplates()));
 		model.addAttribute("templateName", dashboard.getFirstTemplate());
-		model.addAttribute("templateContent", readTemplateContent(dashboard, dashboard.getFirstTemplate()));
+		model.addAttribute("templateContent", readResourceContent(dashboard, dashboard.getFirstTemplate()));
 		model.addAttribute(KEY_TITLE_MESSAGE_KEY, "dashboard.viewDashboard");
 		model.addAttribute(KEY_READONLY, true);
 
@@ -727,16 +744,16 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 			TemplateDashboardWidgetResManager resManager = this.htmlTplDashboardWidgetEntityService
 					.getHtmlTplDashboardWidgetRenderer().getTemplateDashboardWidgetResManager();
 
-			if (!resManager.containsResource(id, resName))
+			if (!resManager.exists(id, resName))
 				throw new FileNotFoundException(resName);
 
 			setContentTypeByName(request, response, getServletContext(), resName);
 
-			long lastModified = resManager.lastModifiedResource(id, resName);
+			long lastModified = resManager.lastModified(id, resName);
 			if (webRequest.checkNotModified(lastModified))
 				return;
 
-			InputStream in = resManager.getResourceInputStream(id, resName);
+			InputStream in = resManager.getInputStream(id, resName);
 			OutputStream out = response.getOutputStream();
 
 			try
@@ -971,7 +988,7 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 	{
 		HttpSession session = request.getSession();
 
-		String contextPath = getWebContextPath(request).get(request);
+		String contextPath = WebUtils.getContextPath(request);
 		WebContext webContext = new WebContext(contextPath,
 				addJsessionidParam(contextPath + "/analysis/dashboard/showData", session.getId()),
 				addJsessionidParam(contextPath + "/analysis/dashboard/loadChart", session.getId()));
@@ -991,19 +1008,58 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 			throw new IllegalInputException();
 	}
 
-	protected String readTemplateContent(HtmlTplDashboardWidgetEntity widget, String templateName) throws IOException
+	protected String readResourceContent(HtmlTplDashboardWidgetEntity widget, String templateName) throws IOException
 	{
 		String templateContent = this.htmlTplDashboardWidgetEntityService.getHtmlTplDashboardWidgetRenderer()
-				.readTemplateContent(widget, templateName);
+				.readResourceContent(widget, templateName);
 
 		return templateContent;
 	}
 
-	protected void saveTemplateContent(HtmlTplDashboardWidgetEntity widget, String templateName, String templateContent)
+	protected void saveResourceContent(HtmlTplDashboardWidgetEntity widget, String name, String content)
 			throws IOException
 	{
-		this.htmlTplDashboardWidgetEntityService.getHtmlTplDashboardWidgetRenderer().saveTemplateContent(widget,
-				templateName, templateContent);
+		this.htmlTplDashboardWidgetEntityService.getHtmlTplDashboardWidgetRenderer().saveResourceContent(widget, name,
+				content);
+	}
+
+	protected String[] mergeTemplates(String[] templates, String[] resourceNames, boolean[] resourceIsTemplates)
+	{
+		List<String> ts = new ArrayList<>();
+		if (templates != null)
+			ts.addAll(Arrays.asList(templates));
+
+		boolean autoFirstTemplate = ts.isEmpty();
+
+		for (int i = 0; i < resourceNames.length; i++)
+		{
+			if (resourceIsTemplates[i] && !ts.contains(resourceNames[i]))
+				ts.add(resourceNames[i]);
+		}
+
+		if (autoFirstTemplate)
+		{
+			int firstTempalteIdx = -1;
+
+			for (int i = 0; i < ts.size(); i++)
+			{
+				String tn = ts.get(i);
+
+				if (tn.equalsIgnoreCase("index.html") || tn.equalsIgnoreCase("index.htm"))
+				{
+					firstTempalteIdx = i;
+					break;
+				}
+			}
+
+			if (firstTempalteIdx > 0)
+			{
+				String tn = ts.remove(firstTempalteIdx);
+				ts.add(0, tn);
+			}
+		}
+
+		return ts.toArray(new String[ts.size()]);
 	}
 
 	protected void trimResourceNames(String[] resourceNames)
@@ -1031,5 +1087,71 @@ public class DashboardController extends AbstractDataAnalysisController implemen
 			HtmlTplDashboardWidgetEntity entity)
 	{
 		setCookieAnalysisProjectIfValid(request, response, this.analysisProjectService, entity);
+	}
+
+	public static class HtmlTplDashboardSaveForm
+	{
+		private HtmlTplDashboardWidgetEntity dashboard;
+
+		private String[] resourceNames;
+
+		private String[] resourceContents;
+
+		private boolean[] resourceIsTemplates;
+
+		public HtmlTplDashboardSaveForm()
+		{
+			super();
+		}
+
+		public HtmlTplDashboardSaveForm(HtmlTplDashboardWidgetEntity dashboard, String[] resourceNames,
+				String[] resourceContents, boolean[] resourceIsTemplates)
+		{
+			super();
+			this.dashboard = dashboard;
+			this.resourceNames = resourceNames;
+			this.resourceContents = resourceContents;
+			this.resourceIsTemplates = resourceIsTemplates;
+		}
+
+		public HtmlTplDashboardWidgetEntity getDashboard()
+		{
+			return dashboard;
+		}
+
+		public void setDashboard(HtmlTplDashboardWidgetEntity dashboard)
+		{
+			this.dashboard = dashboard;
+		}
+
+		public String[] getResourceNames()
+		{
+			return resourceNames;
+		}
+
+		public void setResourceNames(String[] resourceNames)
+		{
+			this.resourceNames = resourceNames;
+		}
+
+		public String[] getResourceContents()
+		{
+			return resourceContents;
+		}
+
+		public void setResourceContents(String[] resourceContents)
+		{
+			this.resourceContents = resourceContents;
+		}
+
+		public boolean[] getResourceIsTemplates()
+		{
+			return resourceIsTemplates;
+		}
+
+		public void setResourceIsTemplates(boolean[] resourceIsTemplates)
+		{
+			this.resourceIsTemplates = resourceIsTemplates;
+		}
 	}
 }

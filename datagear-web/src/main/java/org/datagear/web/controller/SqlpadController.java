@@ -32,12 +32,12 @@ import org.datagear.util.IOUtil;
 import org.datagear.util.SqlScriptParser;
 import org.datagear.util.SqlScriptParser.SqlStatement;
 import org.datagear.util.StringUtil;
-import org.datagear.web.OperationMessage;
 import org.datagear.web.sqlpad.SqlpadExecutionService;
 import org.datagear.web.sqlpad.SqlpadExecutionService.CommitMode;
 import org.datagear.web.sqlpad.SqlpadExecutionService.ExceptionHandleMode;
 import org.datagear.web.sqlpad.SqlpadExecutionService.SqlCommand;
 import org.datagear.web.sqlpad.SqlpadExecutionSubmit;
+import org.datagear.web.util.OperationMessage;
 import org.datagear.web.util.WebUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -151,10 +151,8 @@ public class SqlpadController extends AbstractSchemaConnController
 			initSql = "";
 
 		String sqlpadId = generateSqlpadId(request, response);
-		String sqlpadChannelId = this.sqlpadExecutionService.getSqlpadChannelId(sqlpadId);
 
 		springModel.addAttribute("sqlpadId", sqlpadId);
-		springModel.addAttribute("sqlpadChannelId", sqlpadChannelId);
 		springModel.addAttribute("sqlResultRowMapper", buildDefaultLOBRowMapper());
 		springModel.addAttribute("initSql", initSql);
 
@@ -194,13 +192,6 @@ public class SqlpadController extends AbstractSchemaConnController
 		if (exceptionHandleMode == null)
 			exceptionHandleMode = ExceptionHandleMode.ABORT;
 
-		if (overTimeThreashold == null)
-			overTimeThreashold = 10;
-		else if (overTimeThreashold < 1)
-			overTimeThreashold = 1;
-		else if (overTimeThreashold > 60)
-			overTimeThreashold = 60;
-
 		if (resultsetFetchSize == null)
 			resultsetFetchSize = DEFAULT_SQL_RESULTSET_FETCH_SIZE;
 
@@ -225,6 +216,21 @@ public class SqlpadController extends AbstractSchemaConnController
 		this.sqlpadExecutionService.command(sqlpadId, sqlCommand);
 
 		return buildOperationMessageSuccessEmptyResponseEntity();
+	}
+
+	@RequestMapping(value = "/{schemaId}/message", produces = CONTENT_TYPE_JSON)
+	@ResponseBody
+	public List<Object> message(HttpServletRequest request, HttpServletResponse response,
+			org.springframework.ui.Model springModel, @PathVariable("schemaId") String schemaId,
+			@RequestParam("sqlpadId") String sqlpadId,
+			@RequestParam(value = "messageCount", required = false) Integer messageCount) throws Throwable
+	{
+		if (messageCount == null)
+			messageCount = 50;
+		if (messageCount < 1)
+			messageCount = 1;
+
+		return this.sqlpadExecutionService.message(sqlpadId, messageCount);
 	}
 
 	@RequestMapping(value = "/{schemaId}/select", produces = CONTENT_TYPE_JSON)

@@ -37,7 +37,7 @@ import org.datagear.management.service.HtmlChartWidgetEntityService.ChartWidgetS
 import org.datagear.persistence.PagingData;
 import org.datagear.util.IDUtil;
 import org.datagear.util.IOUtil;
-import org.datagear.web.OperationMessage;
+import org.datagear.web.util.OperationMessage;
 import org.datagear.web.util.WebUtils;
 import org.datagear.web.vo.APIDDataFilterPagingQuery;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -337,11 +337,11 @@ public class ChartController extends AbstractChartPluginAwareController implemen
 
 			setContentTypeByName(request, response, servletContext, resName);
 
-			long lastModified = resManager.lastModifiedResource(id, resName);
+			long lastModified = resManager.lastModified(id, resName);
 			if (webRequest.checkNotModified(lastModified))
 				return;
 
-			InputStream in = resManager.getResourceInputStream(id, resName);
+			InputStream in = resManager.getInputStream(id, resName);
 			OutputStream out = response.getOutputStream();
 
 			try
@@ -420,7 +420,7 @@ public class ChartController extends AbstractChartPluginAwareController implemen
 	{
 		HttpSession session = request.getSession();
 
-		String contextPath = getWebContextPath(request).get(request);
+		String contextPath = WebUtils.getContextPath(request);
 		WebContext webContext = new WebContext(contextPath,
 				addJsessionidParam(contextPath + "/analysis/chart/showData", session.getId()),
 				addJsessionidParam(contextPath + "/analysis/dashboard/loadChart", session.getId()));

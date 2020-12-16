@@ -26,11 +26,9 @@ import org.datagear.persistence.PagingQuery;
 import org.datagear.util.IOUtil;
 import org.datagear.util.JDBCCompatiblity;
 import org.datagear.util.StringUtil;
-import org.datagear.web.OperationMessage;
-import org.datagear.web.convert.StringToJsonConverter;
+import org.datagear.web.config.support.DeliverContentTypeExceptionHandlerExceptionResolver;
 import org.datagear.web.freemarker.WriteJsonTemplateDirectiveModel;
-import org.datagear.web.util.DeliverContentTypeExceptionHandlerExceptionResolver;
-import org.datagear.web.util.WebContextPath;
+import org.datagear.web.util.OperationMessage;
 import org.datagear.web.util.WebUtils;
 import org.datagear.web.vo.APIDDataFilterPagingQuery;
 import org.datagear.web.vo.DataFilterPagingQuery;
@@ -78,12 +76,10 @@ public abstract class AbstractController
 	public static final String ERROR_PAGE_URL = "/error";
 
 	@Autowired
-	private MessageSource messageSource;
-
-	@Autowired
 	private ConversionService conversionService;
 
-	private StringToJsonConverter stringToJsonConverter = new StringToJsonConverter();
+	@Autowired
+	private MessageSource messageSource;
 
 	public AbstractController()
 	{
@@ -108,16 +104,6 @@ public abstract class AbstractController
 	public void setConversionService(ConversionService conversionService)
 	{
 		this.conversionService = conversionService;
-	}
-
-	public StringToJsonConverter getStringToJsonConverter()
-	{
-		return stringToJsonConverter;
-	}
-
-	public void setStringToJsonConverter(StringToJsonConverter stringToJsonConverter)
-	{
-		this.stringToJsonConverter = stringToJsonConverter;
 	}
 
 	protected boolean setCookieAnalysisProjectIfValid(HttpServletRequest request, HttpServletResponse response,
@@ -260,17 +246,6 @@ public abstract class AbstractController
 		pagingQuery.setDataFilter(value);
 
 		return pagingQuery;
-	}
-
-	/**
-	 * 获取当前请求的{@linkplain WebContextPath}。
-	 * 
-	 * @param request
-	 * @return
-	 */
-	protected WebContextPath getWebContextPath(HttpServletRequest request)
-	{
-		return WebContextPath.getWebContextPath(request);
 	}
 
 	/**
@@ -686,28 +661,56 @@ public abstract class AbstractController
 			if (statusCode == null)
 				statusCode = response.getStatus();
 
-			String message = (String) request.getAttribute("javax.servlet.error.message");
-
-			String statusCodeKey = "error.httpError";
-
-			if (statusCode != null)
-			{
-				int sc = statusCode.intValue();
-				statusCodeKey += "." + sc;
-			}
-
-			try
-			{
-				message = getMessage(request, statusCodeKey, new Object[0]);
-			}
-			catch (Throwable t)
-			{
-			}
-
-			operationMessage = OperationMessage.valueOfFail(statusCodeKey, message);
+			operationMessage = buildOperationMessageForHttpError(request, statusCode);
 		}
 
 		return operationMessage;
+	}
+
+	/**
+	 * 获取HTTP错误时的{@linkplain OperationMessage}。
+	 * 
+	 * @param request
+	 * @param statusCode
+	 *            允许为{@code null}
+	 * @return
+	 */
+	protected OperationMessage getOperationMessageForHttpError(HttpServletRequest request, Integer statusCode)
+	{
+		OperationMessage operationMessage = WebUtils.getOperationMessage(request);
+
+		if (operationMessage == null)
+			operationMessage = buildOperationMessageForHttpError(request, statusCode);
+
+		return operationMessage;
+	}
+
+	/**
+	 * 构建HTTP错误的{@linkplain OperationMessage}。
+	 * 
+	 * @param request
+	 * @param statusCode
+	 *            允许为{@code null}
+	 * @return
+	 */
+	protected OperationMessage buildOperationMessageForHttpError(HttpServletRequest request, Integer statusCode)
+	{
+		String message = (String) request.getAttribute("javax.servlet.error.message");
+
+		String statusCodeKey = "error.httpError";
+
+		if (statusCode != null)
+			statusCodeKey += "." + statusCode.intValue();
+
+		try
+		{
+			message = getMessage(request, statusCodeKey, new Object[0]);
+		}
+		catch (Throwable t)
+		{
+		}
+
+		return OperationMessage.valueOfFail(statusCodeKey, message);
 	}
 
 	/**
@@ -748,20 +751,20 @@ public abstract class AbstractController
 	 */
 	protected String resolvePathAfter(HttpServletRequest request, String pathPrefix)
 	{
-		String pathInfo = request.getPathInfo();
+		String uri = request.getRequestURI();
 
 		if (StringUtil.isEmpty(pathPrefix))
-			return pathInfo;
+			return uri;
 
-		if (pathInfo.endsWith(pathPrefix))
+		if (uri.endsWith(pathPrefix))
 			return "";
 
-		int index = pathInfo.indexOf(pathPrefix);
+		int index = uri.indexOf(pathPrefix);
 
 		if (index < 0)
 			return null;
 
-		return pathInfo.substring(index + pathPrefix.length());
+		return uri.substring(index + pathPrefix.length());
 	}
 
 	/**
@@ -802,6 +805,17 @@ public abstract class AbstractController
 	protected boolean isEmpty(String s)
 	{
 		return StringUtil.isEmpty(s);
+	}
+
+	/**
+	 * 对象是否为{@code null}。
+	 * 
+	 * @param obj
+	 * @return
+	 */
+	protected boolean isNull(Object obj)
+	{
+		return (obj == null);
 	}
 
 	/**

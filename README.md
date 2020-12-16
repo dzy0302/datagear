@@ -1,9 +1,9 @@
 # DataGear
 
-DataGear是一款数据可视化分析平台，使用Java语言开发，采用浏览器/服务器架构，支持SQL、CSV、Excel、HTTP接口、JSON等多种数据源，
+DataGear是一款开源免费的数据可视化分析平台，使用Java语言开发，采用浏览器/服务器架构，支持SQL、CSV、Excel、HTTP接口、JSON等多种数据源，
 主要功能包括数据管理、SQL工作台、数据导入/导出、数据集管理、图表管理、看板管理等。
 
-## [DataGear 1.13.1 已发布，欢迎官网下载使用！](http://www.datagear.tech)
+## [DataGear 2.0.0 已发布，欢迎官网下载使用！](http://www.datagear.tech)
 
 ## [DataGear 大屏看板模板，持续更新中...](https://gitee.com/datagear/DataGearDashboardTemplate)
 
@@ -44,6 +44,12 @@ DataGear是一款数据可视化分析平台，使用Java语言开发，采用�
 QQ群：[916083747（已满）](https://jq.qq.com/?_wv=1027&k=ODxiKOOy)、[1128360199](https://jq.qq.com/?_wv=1027&k=XkQ4ARMY)
 
 留言板：[http://www.datagear.tech/messageboard](http://www.datagear.tech/messageboard/)
+
+## 源码
+
+Gitee：[https://gitee.com/datagear/datagear](https://gitee.com/datagear/datagear)
+
+Github：[https://github.com/datageartech/datagear](https://github.com/datageartech/datagear)
 
 ## 界面
 
@@ -117,18 +123,12 @@ SQL工作台
   <br>系统常用工具集模块
 
 - datagear-web
-  <br>系统业务web模块，定义web控制器、操作页面
-
-- datagear-webapp
-  <br>系统Web应用程序组织模块，定义将系统构建为标准WAR程序包的结构
-
-- datagear-webappembd
-  <br>系统独立应用程序组织模块，定义将系统构建为独立可执行程序的结构
+  <br>系统web模块，定义web控制器、操作页面
 
 ## 依赖
 
 	Java 8+
-	Servlet 3.0+
+	Servlet 3.1+
 
 ## 编译
 
@@ -139,31 +139,31 @@ SQL工作台
 	（不执行单元测试编译，无需预先配置单元测试环境）
 	mvn clean package -DskipTests
 
-## 运行
-
-	cd datagear-webappembd/target/datagear-[version]
-	
-	（Linux环境）
-	./startup.sh
-	
-	（windows环境）
-	startup.bat
+编译完成后，将在`datagear-web/target/datagear-[version]-packages/`内生成程序包。
 
 ## 调试
 	
 	1. 将datagear以maven工程导入至IDE工具；
-	2. 将datagear-webapp作为Web应用添加至servlet容器（比如Tomcat）；
-	3. 以调试模式运行Servlet容器。
+	2. 以调试模式运行datagear-web模块的：org.datagear.web.DataGearApplication
+	3. 打开浏览器，输入：http://localhost:50401
 	
 ## 调试注意
 
 在调试开发分支前（`dev-*`），建议先备份DataGear工作目录（`[用户主目录]/.datagear`），
 因为开发分支程序启动时会修改DataGear工作目录，可能会导致先前使用的正式版程序、以及后续发布的正式版程序无法正常启动。
 
-调试时，系统仅会在第一次启动时升级内置数据库（Derby），如果遇到内置数据库访问异常，需要查看
+系统启动时会根据当前版本号自动升级内置数据库（Derby），且成功后下次启动时不再自动执行，如果调试时遇到数据库异常，需要查看
 
 	datagear-management/src/main/resources/org/datagear/management/ddl/datagear.sql
 
-文件，从中查找需要更新的SQL语句，手动更新至内置数据库。
+文件，从中查找需要更新的SQL语句，手动执行。
+
+然后，手动执行下面更新系统版本号的SQL语句：
+
+	UPDATE DATAGEAR_VERSION SET VERSION_MAJOR='主版本号', VERSION_MINOR='次版本号', VERSION_REVISION = '修订版本号'
+	
+例如，对于`2.0.0`版本，应执行：
+
+	UPDATE DATAGEAR_VERSION SET VERSION_MAJOR='2', VERSION_MINOR='0', VERSION_REVISION = '0'
 
 系统自带了一个可用于为内置数据库执行SQL语句的简单工具类`org.datagear.web.util.DerbySqlClient`，可以在IDE中直接运行。注意：运行前需要先停止DataGear程序。

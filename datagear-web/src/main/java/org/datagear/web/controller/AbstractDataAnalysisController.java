@@ -153,31 +153,6 @@ public abstract class AbstractDataAnalysisController extends AbstractController
 	}
 
 	/**
-	 * 解析展示看板请求路径的看板资源名。
-	 * <p>
-	 * 返回空字符串表情请求展示首页。
-	 * </p>
-	 * 
-	 * @param request
-	 * @param response
-	 * @param id
-	 * @return
-	 */
-	protected String resolveDashboardResName(HttpServletRequest request, HttpServletResponse response, String id)
-	{
-		String pathInfo = request.getPathInfo();
-
-		String idPath = id + "/";
-
-		if (pathInfo.endsWith(id) || pathInfo.endsWith(idPath))
-			return "";
-
-		String resPath = pathInfo.substring(pathInfo.indexOf(idPath) + idPath.length());
-
-		return resPath;
-	}
-
-	/**
 	 * 获取看板数据。
 	 * 
 	 * @param request
@@ -277,7 +252,7 @@ public abstract class AbstractDataAnalysisController extends AbstractController
 	@SuppressWarnings("unchecked")
 	protected void addHeartBeatValue(HttpServletRequest request, WebContext webContext)
 	{
-		String heartbeatURL = webContext.getContextPath() + "/analysis/dashboard/heartbeat";
+		String heartbeatURL = WebUtils.getContextPath(request) + "/analysis/dashboard/heartbeat";
 		heartbeatURL = addJsessionidParam(heartbeatURL, request.getSession().getId());
 
 		((Map<String, Object>) webContext.getExtraValues()).put(DASHBOARD_HEARTBEAT_URL_NAME, heartbeatURL);
